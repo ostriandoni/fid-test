@@ -1,0 +1,193 @@
+@model Fujitsu.ViewModels.SupplierIndexViewModel
+
+@{
+    ViewData["Title"] = "Supplier Maintenance";
+}
+
+<h1 class="h3 mb-4 text-danger">Supplier Maintenance Screen</h1>
+
+<form id="supplier-search-form" method="get">
+    <div class="card shadow-sm mb-4 border-top">
+        <div class="card-body">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label for="supplierCode" class="form-label mb-1">Supplier Code</label>
+                    <input type="text" id="supplierCode" class="form-control form-control-sm" asp-for="SupplierCodeFilter">
+                </div>
+
+                <div class="col-md-3">
+                    <label for="province" class="form-label mb-1">Province</label>
+                    <select asp-for="SelectedProvinceId" 
+                            asp-items="Model.ProvinceList" 
+                            class="form-select form-select-sm"
+                            id="province">
+                        <option value="">-- Select Province --</option>
+                    </select>
+                </div>
+
+                <div class="col-md-3">
+                    <label for="city" class="form-label mb-1">City</label>
+                    <select id="city" class="form-select form-select-sm" asp-for="SelectedCityId" disabled>
+                        <option value="">-- Select City --</option>
+                    </select>
+                </div>
+
+                <div class="col-md-3 d-flex justify-content-start">
+                    <button id="searchBtn" class="btn btn-danger btn-sm me-2">Search</button> 
+                    <button id="clearBtn" class="btn btn-secondary btn-sm" type="button">Clear</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</form> 
+@* END OF SEARCH FORM (Section 1) *@
+
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-4 p-3 bg-light rounded shadow-sm border border-danger">
+    
+    <div class="d-flex align-items-center mb-3 mb-sm-0">
+        <input type="file" id="fileUpload" class="form-control form-control-sm w-auto me-2">
+        <button id="uploadBtn" class="btn btn-danger btn-sm">Upload</button>
+    </div>
+
+    <div class="btn-group" role="group">
+        <button id="addBtn" class="btn btn-danger btn-sm" data-bs-toggle="modal" data-bs-target="#addSupplierModal">Add</button>
+        <button id="editBtn" class="btn btn-danger btn-sm">Edit</button>
+        <button id="deleteBtn" class="btn btn-danger btn-sm">Delete</button>
+    </div>
+</div>
+@* END OF ACTION AREA (Section 2) *@
+
+<div id="supplier-results-container">
+    @* The search results table and download button will be loaded here via AJAX *@
+</div>
+
+<div class="modal fade" id="addSupplierModal" tabindex="-1" aria-labelledby="addSupplierModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="addSupplierModalLabel">Add New Supplier</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addSupplierForm">
+                    <div class="mb-3">
+                        <label for="newSupplierCode" class="form-label">Supplier Code <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="newSupplierCode" required maxlength="50">
+                    </div>
+                    <div class="mb-3">
+                        <label for="newSupplierName" class="form-label">Supplier Name <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="newSupplierName" required maxlength="100">
+                    </div>
+                    <div class="mb-3">
+                        <label for="newProvince" class="form-label">Province</label>
+                        <input type="text" class="form-control" id="newProvince" maxlength="50">
+                    </div>
+                    <div class="mb-3">
+                        <label for="newCity" class="form-label">City</label>
+                        <input type="text" class="form-control" id="newCity" maxlength="50">
+                    </div>
+                    <div class="mb-3">
+                        <label for="newAddress" class="form-label">Address</label>
+                        <input type="text" class="form-control" id="newAddress" maxlength="250">
+                    </div>
+                    <div class="mb-3">
+                        <label for="newContactPerson" class="form-label">Contact Person (PIC)</label>
+                        <input type="text" class="form-control" id="newContactPerson" maxlength="100">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="submit" class="btn btn-danger" form="addSupplierForm" id="saveSupplierBtn">Save Supplier</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        const resultsContainer = $('#supplier-results-container');
+        const searchForm = $('#supplier-search-form');
+
+        $(document).ready(function () {
+            const searchButton = $('#searchBtn');
+            
+            // --- SEARCH BUTTON CLICK HANDLER ---
+            searchButton.click(function (e) {
+                // Prevent the default form submission (page reload)
+                e.preventDefault(); 
+                
+                // 1. Get the filter data from the form (This correctly serializes all ViewModel properties)
+                var formData = searchForm.serialize();
+                
+                // 2. AJAX call to fetch filtered results
+                $.ajax({
+                    // Use @Url.Action for correct MVC Controller path
+                    url: '@Url.Action("SearchSuppliers", "Supplier")', 
+                    type: "GET",
+                    data: formData, // jQuery handles appending this to the URL as the query string
+                    beforeSend: function() {
+                        resultsContainer.html('<p class="text-center">Loading results...</p>');
+                    },
+                    success: function (data) {
+                        // 3. Replace the content of the results container with the partial view HTML
+                        resultsContainer.html(data);
+                    },
+                    error: function (xhr, status, error) {
+                        console.error("Search failed:", error);
+                        resultsContainer.html('<p class="text-center text-danger">Error loading data. Check console.</p>');
+                    }
+                });
+            });
+
+            // --- CLEAR BUTTON HANDLER ---
+            $('#clearBtn').click(function() {
+                // Clear all form inputs within the search form
+                searchForm.find('input, select').val('');
+                
+                // Clear the results container
+                resultsContainer.empty();
+                
+                // Reset Province & City dropdown state
+                $('#province').val('');
+                $('#city').empty().append('<option value="">-- Select City --</option>').prop('disabled', true);
+            });
+
+            // --- CASCADING DROPDOWN LOGIC ---
+            $('#province').change(function () {
+                var provinceId = $(this).val();
+                var cityDropdown = $('#city');
+                
+                cityDropdown.empty().append('<option value="">-- Select City --</option>');
+                cityDropdown.prop('disabled', true); 
+
+                if (provinceId) {
+                    // AJAX call to the API Controller 
+                    $.ajax({
+                        url: '/api/supplierapi/cities',
+                        type: "GET",
+                        data: { provinceId: provinceId },
+                        success: function (data) {
+                            // Populate the City dropdown with JSON data
+                            $.each(data, function (index, item) {
+                                cityDropdown.append(
+                                    $('<option></option>').val(item.value).html(item.text)
+                                );
+                            });
+                            cityDropdown.prop('disabled', false); // Re-enable the City dropdown
+                        },
+                        error: function (xhr, status, error) {
+                            console.error("Error fetching cities:", error);
+                            cityDropdown.append('<option value="" disabled>Error loading cities</option>');
+                        }
+                    });
+                }
+            });
+
+            document.getElementById('addSupplierForm').addEventListener('submit', addSupplier);
+            document.getElementById('editBtn').addEventListener('click', () => alert('Edit feature coming soon!'));
+            document.getElementById('deleteBtn').addEventListener('click', () => alert('Delete feature coming soon!'));
+            document.getElementById('uploadBtn').addEventListener('click', () => alert('Upload feature coming soon!'));
+        });
+    </script>
+}

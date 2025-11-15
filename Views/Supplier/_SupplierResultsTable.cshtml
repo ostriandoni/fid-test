@@ -1,0 +1,50 @@
+@model Fujitsu.ViewModels.SupplierIndexViewModel
+@using System.Linq
+
+@if (Model.HasResults) {
+    <div class="card shadow-sm">
+        <div class="card-body p-0 table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th><input type="checkbox" /></th>
+                        <th>Supplier Code</th>
+                        <th>Supplier Name</th>
+                        <th>Address</th>
+                        <th>Province</th>
+                        <th>City</th>
+                        <th>PIC</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (Model.Suppliers != null && Model.Suppliers.Any())
+                    {
+                        @foreach (var supplier in Model.Suppliers)
+                        {
+                            <tr>
+                                <td><input type="checkbox" /></td>
+                                <td>@supplier.SupplierCode</td>
+                                <td>@supplier.SupplierName</td>
+                                <td>@supplier.Address</td>
+                                @* You may need to load Province and City Names from navigation properties *@
+                                <td>@supplier.Province</td> 
+                                <td>@supplier.City</td>
+                                <td>@supplier.ContactPerson</td>
+                            </tr>
+                        }
+                    }
+                    else
+                    {
+                        <tr>
+                            <td colspan="7" class="text-center text-danger">Data not found.</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="text-center mt-3">
+        <button type="button" class="btn btn-danger">Download</button>
+    </div>
+}
