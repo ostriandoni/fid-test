@@ -227,7 +227,7 @@
 
             document.getElementById('addSupplierForm').addEventListener('submit', addSupplier);
             document.getElementById('editBtn').addEventListener('click', () => alert('Edit feature coming soon!'));
-            document.getElementById('deleteBtn').addEventListener('click', () => alert('Delete feature coming soon!'));
+            document.getElementById('deleteBtn').addEventListener('click', deleteSelectedSuppliers);
             document.getElementById('uploadBtn').addEventListener('click', () => alert('Upload feature coming soon!'));
         });
 
@@ -269,6 +269,47 @@
                 }
             } catch (error) {
                 alert('An unexpected error occurred while communicating with the server.');
+                console.error('Fetch Error:', error);
+            }
+        }
+
+        async function deleteSelectedSuppliers() {
+            const selectedIds = [];
+
+            $('input[type="checkbox"]:checked').each(function() {
+                if ($(this).attr('id') !== 'selectAll') {
+                    selectedIds.push($(this).val());
+                }
+            });
+
+            if (selectedIds.length === 0) {
+                alert('Please select at least one supplier to delete.');
+                return;
+            }
+
+            if (!confirm(`Apakah Anda yakin ingin menghapus data ini?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/supplierapi/delete', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(selectedIds),
+                });
+
+                if (response.ok) {
+                    alert('Supplier(s) successfully deleted!');
+                    $('#searchBtn').click();
+                } else {
+                    const errorData = await response.json();
+                    alert(`Deletion failed. Error: ${errorData.message || response.statusText}`);
+                    console.error('Deletion API Error:', errorData);
+                }
+            } catch (error) {
+                alert('An unexpected error occurred while deleting the supplier(s).');
                 console.error('Fetch Error:', error);
             }
         }

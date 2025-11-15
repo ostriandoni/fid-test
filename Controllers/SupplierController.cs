@@ -194,5 +194,41 @@ namespace Fujitsu.Controllers
                 return StatusCode(500, $"Database error occurred: {ex.InnerException?.Message ?? ex.Message}");
             }
         }
+
+        [HttpPost]
+        [Route("delete")]
+        public async Task<IActionResult> DeleteSuppliers([FromBody] List<int> supplierIds)
+        {
+            if (supplierIds == null || !supplierIds.Any())
+            {
+                return BadRequest(new { message = "No supplier IDs provided for deletion." });
+            }
+
+            // 1. Retrieve the entities to be deleted
+            // Use Where(s => supplierIds.Contains(s.SupplierId)) to select all suppliers whose IDs are in the provided list.
+            var suppliersToDelete = await _context.Suppliers
+                .Where(s => supplierIds.Contains(s.SupplierId))
+                .ToListAsync();
+
+            if (!suppliersToDelete.Any())
+            {
+                return NotFound(new { message = "No matching suppliers found for the provided IDs." });
+            }
+
+            // 2. Remove the entities from the context
+            _context.Suppliers.RemoveRange(suppliersToDelete);
+
+            // 3. Save changes to the database
+            try
+            {
+                await _context.SaveChangesAsync();
+                return Ok(new { message = $"{suppliersToDelete.Count} supplier(s) successfully deleted." });
+            }
+            catch (DbUpdateException ex)
+            {
+                Console.Error.WriteLine($"Error during bulk delete: {ex}");
+                return StatusCode(500, new { message = "A database error occurred during deletion." });
+            }
+        }
     }
 }

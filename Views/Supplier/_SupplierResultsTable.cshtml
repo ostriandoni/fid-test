@@ -22,7 +22,7 @@
                         @foreach (var supplier in Model.Suppliers)
                         {
                             <tr>
-                                <td><input type="checkbox" /></td>
+                                <td><input type="checkbox" value="@supplier.SupplierId"/></td>
                                 <td>@supplier.SupplierCode</td>
                                 <td>@supplier.SupplierName</td>
                                 <td>@supplier.Address</td>
