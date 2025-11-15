@@ -70,8 +70,7 @@ namespace Fujitsu.Controllers
                     // FIX: Use ToLower() on both sides for case-insensitive comparison
                     // This is translatable to SQL
                     var lowerProvinceName = provinceName.ToLower();
-                    query = query.Where(s => s.Province != null && 
-                                            s.Province.ToLower() == lowerProvinceName); 
+                    query = query.Where(s => s.Province != null && s.Province.ToLower() == lowerProvinceName);
                 }
             }
             
@@ -87,11 +86,10 @@ namespace Fujitsu.Controllers
                 {
                     // FIX: Use ToLower() on both sides for case-insensitive comparison
                     var lowerCityName = cityName.ToLower();
-                    query = query.Where(s => s.City != null && 
-                                            s.City.ToLower() == lowerCityName);
+                    query = query.Where(s => s.City != null && s.City.ToLower() == lowerCityName);
                 }
             }
-            
+
             // Execute query and prepare results
             model.Suppliers = query.ToList(); 
 
@@ -129,60 +127,72 @@ namespace Fujitsu.Controllers
             return Ok(cities);
         }
 
-        // GET: api/Supplier?code=X&province=Y&city=Z
-        // This endpoint handles the search and initial data load
-        [HttpGet]
-        public async Task<ActionResult<IEnumerable<Supplier>>> GetSuppliers(
-            [FromQuery] string code, 
-            [FromQuery] string province, 
-            [FromQuery] string city)
-        {
-            IQueryable<Supplier> suppliers = _context.Suppliers;
-
-            // Apply filters based on query parameters
-            if (!string.IsNullOrEmpty(code))
-            {
-                // Searches code and name
-                suppliers = suppliers.Where(s => s.SupplierCode.Contains(code) || s.SupplierName.Contains(code));
-            }
-
-            if (!string.IsNullOrEmpty(province))
-            {
-                suppliers = suppliers.Where(s => s.Province == province);
-            }
-
-            if (!string.IsNullOrEmpty(city))
-            {
-                suppliers = suppliers.Where(s => s.City == city);
-            }
-
-            // Execute the query and return the results as JSON
-            return await suppliers.ToListAsync();
-        }
-
-        // POST: api/Supplier
-        // This endpoint handles creating a new supplier record
         [HttpPost]
-        public async Task<ActionResult<Supplier>> PostSupplier(Supplier supplier)
+        [Route("add")]
+        public async Task<IActionResult> AddSupplier([FromBody] AddSupplierModel model)
         {
-            // Basic server-side validation for required fields
-            if (string.IsNullOrEmpty(supplier.SupplierCode) || string.IsNullOrEmpty(supplier.SupplierName))
+            // 1. Basic Validation
+            if (string.IsNullOrWhiteSpace(model.SupplierCode) || string.IsNullOrWhiteSpace(model.SupplierName))
             {
                 return BadRequest("Supplier Code and Supplier Name are required.");
             }
 
-            // Ensure we don't accidentally try to update an existing ID
-            supplier.SupplierId = 0; 
+            // 2. Lookup Province and City Names using the IDs
+            string provinceName = null;
+            string cityName = null;
 
-            // Add the new supplier to the DbContext
-            _context.Suppliers.Add(supplier);
+            if (model.ProvinceId.HasValue)
+            {
+                // Asynchronously query the Province table for the name
+                provinceName = await _context.Provinces
+                    .Where(p => p.ProvinceId == model.ProvinceId.Value)
+                    .Select(p => p.ProvinceName)
+                    .FirstOrDefaultAsync();
+            }
+
+            if (model.CityId.HasValue)
+            {
+                // Asynchronously query the City table for the name
+                cityName = await _context.Cities
+                    .Where(c => c.CityId == model.CityId.Value)
+                    .Select(c => c.CityName)
+                    .FirstOrDefaultAsync();
+            }
             
-            // Save changes to the SQLite database
-            await _context.SaveChangesAsync();
+            // Optional: Check if the IDs provided actually exist in the database
+            // if (model.ProvinceId.HasValue && provinceName == null) return NotFound("Invalid Province ID.");
+            // if (model.CityId.HasValue && cityName == null) return NotFound("Invalid City ID.");
 
-            // Return the newly created supplier, including the generated SupplierId
-            // Uses CreatedAtAction (201 Created) for REST convention
-            return CreatedAtAction(nameof(GetSuppliers), new { id = supplier.SupplierId }, supplier);
+
+            // 3. Map to the Supplier Entity
+            var newSupplier = new Supplier
+            {
+                SupplierCode = model.SupplierCode.Trim(),
+                SupplierName = model.SupplierName.Trim(),
+                
+                // Assign the looked-up names (will be null if nothing was selected/found)
+                Province = provinceName,
+                City = cityName,
+
+                Address = model.Address?.Trim(), // Use null conditional operator for optional fields
+                ContactPerson = model.ContactPerson?.Trim(),
+            };
+
+            // 4. Save to Database
+            try
+            {
+                _context.Suppliers.Add(newSupplier);
+                await _context.SaveChangesAsync();
+                
+                // 5. Return success status
+                return Ok(new { message = "Supplier successfully added.", supplierId = newSupplier.SupplierId });
+            }
+            catch (DbUpdateException ex)
+            {
+                // Handle database errors (e.g., unique constraint violation on SupplierCode)
+                // Log the exception details here
+                return StatusCode(500, $"Database error occurred: {ex.InnerException?.Message ?? ex.Message}");
+            }
         }
     }
 }

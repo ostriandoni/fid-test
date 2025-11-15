@@ -78,27 +78,36 @@
                         <label for="newSupplierName" class="form-label">Supplier Name <span class="text-danger">*</span></label>
                         <input type="text" class="form-control" id="newSupplierName" required maxlength="100">
                     </div>
+                    
                     <div class="mb-3">
-                        <label for="newProvince" class="form-label">Province</label>
-                        <input type="text" class="form-control" id="newProvince" maxlength="50">
+                        <label for="newProvinceDropdown" class="form-label">Province <span class="text-danger">*</span></label>
+                        <select id="newProvinceDropdown" class="form-select form-select-sm" 
+                                name="newProvinceId" required
+                                asp-items="Model.ProvinceList">
+                            <option value="">-- Select Province --</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="newCityDropdown" class="form-label">City <span class="text-danger">*</span></label>
+                        <select id="newCityDropdown" class="form-select form-select-sm" name="newCityId" disabled required>
+                            <option value="">-- Select City --</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="newAddress" class="form-label">Address <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="newAddress" maxlength="250" required>
                     </div>
                     <div class="mb-3">
-                        <label for="newCity" class="form-label">City</label>
-                        <input type="text" class="form-control" id="newCity" maxlength="50">
-                    </div>
-                    <div class="mb-3">
-                        <label for="newAddress" class="form-label">Address</label>
-                        <input type="text" class="form-control" id="newAddress" maxlength="250">
-                    </div>
-                    <div class="mb-3">
-                        <label for="newContactPerson" class="form-label">Contact Person (PIC)</label>
-                        <input type="text" class="form-control" id="newContactPerson" maxlength="100">
+                        <label for="newContactPerson" class="form-label">PIC <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="newContactPerson" maxlength="100" required>
                     </div>
                 </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                <button type="submit" class="btn btn-danger" form="addSupplierForm" id="saveSupplierBtn">Save Supplier</button>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="submit" class="btn btn-danger" form="addSupplierForm" id="saveSupplierBtn">Save Supplier</button>
+                </div>
             </div>
         </div>
     </div>
@@ -153,7 +162,7 @@
                 $('#city').empty().append('<option value="">-- Select City --</option>').prop('disabled', true);
             });
 
-            // --- CASCADING DROPDOWN LOGIC ---
+            // --- CASCADING DROPDOWN LOGIC (Search Filter) ---
             $('#province').change(function () {
                 var provinceId = $(this).val();
                 var cityDropdown = $('#city');
@@ -184,10 +193,84 @@
                 }
             });
 
+            // --- CASCADING DROPDOWN LOGIC (Add Modal) ---
+            $('#newProvinceDropdown').change(function () {
+                var provinceId = $(this).val();
+                var cityDropdown = $('#newCityDropdown'); // Targets the modal city dropdown
+                
+                // Clear and disable the City dropdown initially
+                cityDropdown.empty().append('<option value="">-- Select City --</option>');
+                cityDropdown.prop('disabled', true); 
+
+                if (provinceId) {
+                    // AJAX call to the API Controller 
+                    $.ajax({
+                        url: '/api/supplierapi/cities',
+                        type: "GET",
+                        data: { provinceId: provinceId },
+                        success: function (data) {
+                            // Populate the City dropdown with JSON data
+                            $.each(data, function (index, item) {
+                                cityDropdown.append(
+                                    $('<option></option>').val(item.value).html(item.text)
+                                );
+                            });
+                            cityDropdown.prop('disabled', false); // Re-enable the City dropdown
+                        },
+                        error: function (xhr, status, error) {
+                            console.error("Error fetching cities for modal:", error);
+                            cityDropdown.append('<option value="" disabled>Error loading cities</option>');
+                        }
+                    });
+                }
+            });
+
             document.getElementById('addSupplierForm').addEventListener('submit', addSupplier);
             document.getElementById('editBtn').addEventListener('click', () => alert('Edit feature coming soon!'));
             document.getElementById('deleteBtn').addEventListener('click', () => alert('Delete feature coming soon!'));
             document.getElementById('uploadBtn').addEventListener('click', () => alert('Upload feature coming soon!'));
         });
+
+        async function addSupplier(event) {
+            event.preventDefault();
+            
+            const supplierData = {
+                supplierCode: document.getElementById('newSupplierCode').value.trim(),
+                supplierName: document.getElementById('newSupplierName').value.trim(),
+                provinceId: document.getElementById('newProvinceDropdown').value.trim(), 
+                cityId: document.getElementById('newCityDropdown').value.trim(),
+                address: document.getElementById('newAddress').value.trim(),
+                contactPerson: document.getElementById('newContactPerson').value.trim()
+            };
+
+            if (!supplierData.supplierCode || !supplierData.supplierName) {
+                alert('Supplier Code and Supplier Name are required!');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/supplierapi/add', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(supplierData),
+                });
+
+                if (response.ok) {
+                    alert('Data Successfully Saved');
+                    $('#addSupplierModal').modal('hide');
+                    document.getElementById('addSupplierForm').reset();
+                    $('#searchBtn').click(); 
+                } else {
+                    const errorText = await response.text();
+                    alert(`Failed to add supplier. Error: ${errorText}`);
+                    console.error('API Error:', errorText);
+                }
+            } catch (error) {
+                alert('An unexpected error occurred while communicating with the server.');
+                console.error('Fetch Error:', error);
+            }
+        }
     </script>
 }
