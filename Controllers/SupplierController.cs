@@ -73,7 +73,7 @@ namespace Fujitsu.Controllers
                     query = query.Where(s => s.Province != null && s.Province.ToLower() == lowerProvinceName);
                 }
             }
-            
+
             // --- Filter by City (By Name Lookup) ---
             if (model.SelectedCityId.HasValue && model.SelectedCityId.Value > 0)
             {
@@ -91,7 +91,7 @@ namespace Fujitsu.Controllers
             }
 
             // Execute query and prepare results
-            model.Suppliers = query.ToList(); 
+            model.Suppliers = query.ToList();
 
             return PartialView("_SupplierResultsTable", model);
         }
@@ -117,7 +117,7 @@ namespace Fujitsu.Controllers
             var cities = _context.Cities
                 .Where(c => c.ProvinceId == provinceId)
                 .OrderBy(c => c.CityName)
-                .Select(c => new 
+                .Select(c => new
                 {
                     value = c.CityId,
                     text = c.CityName
@@ -158,7 +158,7 @@ namespace Fujitsu.Controllers
                     .Select(c => c.CityName)
                     .FirstOrDefaultAsync();
             }
-            
+
             // Optional: Check if the IDs provided actually exist in the database
             // if (model.ProvinceId.HasValue && provinceName == null) return NotFound("Invalid Province ID.");
             // if (model.CityId.HasValue && cityName == null) return NotFound("Invalid City ID.");
@@ -169,7 +169,7 @@ namespace Fujitsu.Controllers
             {
                 SupplierCode = model.SupplierCode.Trim(),
                 SupplierName = model.SupplierName.Trim(),
-                
+
                 // Assign the looked-up names (will be null if nothing was selected/found)
                 Province = provinceName,
                 City = cityName,
@@ -183,7 +183,7 @@ namespace Fujitsu.Controllers
             {
                 _context.Suppliers.Add(newSupplier);
                 await _context.SaveChangesAsync();
-                
+
                 // 5. Return success status
                 return Ok(new { message = "Supplier successfully added.", supplierId = newSupplier.SupplierId });
             }
