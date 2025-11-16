@@ -7,6 +7,7 @@ using Fujitsu.ViewModels;
 using System.Linq;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using ClosedXML.Excel;
 
 namespace Fujitsu.Controllers
 {
@@ -20,7 +21,6 @@ namespace Fujitsu.Controllers
             _context = context;
         }
 
-        // GET: /Supplier/Index
         public IActionResult Index()
         {
             // A. Query the master data for the dropdown
@@ -32,14 +32,14 @@ namespace Fujitsu.Controllers
             });
 
             // B. Query the main data for the page (Suppliers)
-            var suppliers = _context.Suppliers.ToList(); // Add filtering here later
+            var suppliers = _context.Suppliers.ToList();
 
             // C. Combine everything into the dedicated View Model
             var viewModel = new SupplierIndexViewModel
             {
                 Suppliers = suppliers,
                 ProvinceList = provinceItems,
-                SelectedProvinceId = null // Default to "All"
+                SelectedProvinceId = null
             };
 
             return View(viewModel);
@@ -50,14 +50,12 @@ namespace Fujitsu.Controllers
         {
             var query = _context.Suppliers.AsQueryable();
 
-            // --- Filter by Supplier Code ---
             if (!string.IsNullOrEmpty(model.SupplierCodeFilter))
             {
                 // Using ToLower() for case-insensitive matching if needed, though Contains() is generally case-insensitive in SQL by default.
                 query = query.Where(s => s.SupplierCode != null && s.SupplierCode.ToLower().Contains(model.SupplierCodeFilter.ToLower()));
             }
 
-            // --- Filter by Province (By Name Lookup) ---
             if (model.SelectedProvinceId.HasValue && model.SelectedProvinceId.Value > 0)
             {
                 var provinceName = _context.Provinces
@@ -67,14 +65,11 @@ namespace Fujitsu.Controllers
 
                 if (!string.IsNullOrEmpty(provinceName))
                 {
-                    // FIX: Use ToLower() on both sides for case-insensitive comparison
-                    // This is translatable to SQL
                     var lowerProvinceName = provinceName.ToLower();
                     query = query.Where(s => s.Province != null && s.Province.ToLower() == lowerProvinceName);
                 }
             }
 
-            // --- Filter by City (By Name Lookup) ---
             if (model.SelectedCityId.HasValue && model.SelectedCityId.Value > 0)
             {
                 var cityName = _context.Cities
@@ -84,16 +79,104 @@ namespace Fujitsu.Controllers
 
                 if (!string.IsNullOrEmpty(cityName))
                 {
-                    // FIX: Use ToLower() on both sides for case-insensitive comparison
                     var lowerCityName = cityName.ToLower();
                     query = query.Where(s => s.City != null && s.City.ToLower() == lowerCityName);
                 }
             }
 
-            // Execute query and prepare results
             model.Suppliers = query.ToList();
 
             return PartialView("_SupplierResultsTable", model);
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> DownloadSuppliers(SupplierIndexViewModel viewModel)
+        {
+            var supplierCodeFilter = viewModel.SupplierCodeFilter;
+            var selectedProvinceId = viewModel.SelectedProvinceId;
+            var selectedCityId = viewModel.SelectedCityId;
+
+            var query = _context.Suppliers.AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(supplierCodeFilter))
+            {
+                query = query.Where(s => s.SupplierCode.Contains(supplierCodeFilter) ||
+                                         s.SupplierName.Contains(supplierCodeFilter));
+            }
+
+            if (selectedProvinceId.HasValue && selectedProvinceId.Value > 0)
+            {
+                var provinceName = await _context.Provinces
+                    .Where(p => p.ProvinceId == selectedProvinceId.Value)
+                    .Select(p => p.ProvinceName)
+                    .FirstOrDefaultAsync();
+
+                if (!string.IsNullOrWhiteSpace(provinceName))
+                {
+                    query = query.Where(s => s.Province == provinceName);
+                }
+            }
+
+            if (selectedCityId.HasValue && selectedCityId.Value > 0)
+            {
+                var cityName = await _context.Cities
+                    .Where(c => c.CityId == selectedCityId.Value)
+                    .Select(c => c.CityName)
+                    .FirstOrDefaultAsync();
+
+                if (!string.IsNullOrWhiteSpace(cityName))
+                {
+                    query = query.Where(s => s.City == cityName);
+                }
+            }
+
+            var suppliers = await query.ToListAsync();
+
+
+            using (var workbook = new XLWorkbook())
+            {
+                var worksheet = workbook.Worksheets.Add("Supplier Data");
+
+                // Define Column Headers
+                worksheet.Cell(1, 1).Value = "Supplier Code";
+                worksheet.Cell(1, 2).Value = "Supplier Name";
+                worksheet.Cell(1, 3).Value = "Address";
+                worksheet.Cell(1, 4).Value = "Province";
+                worksheet.Cell(1, 5).Value = "City";
+                worksheet.Cell(1, 6).Value = "PIC";
+
+                // Apply basic header formatting (optional)
+                worksheet.Row(1).Style.Font.Bold = true;
+
+                // Populate Data Rows
+                int currentRow = 2;
+                foreach (var supplier in suppliers)
+                {
+                    worksheet.Cell(currentRow, 1).Value = supplier.SupplierCode;
+                    worksheet.Cell(currentRow, 2).Value = supplier.SupplierName;
+                    worksheet.Cell(currentRow, 3).Value = supplier.Address;
+                    worksheet.Cell(currentRow, 4).Value = supplier.Province;
+                    worksheet.Cell(currentRow, 5).Value = supplier.City;
+                    worksheet.Cell(currentRow, 6).Value = supplier.ContactPerson;
+                    currentRow++;
+                }
+
+                // Auto-fit columns for readability (optional)
+                worksheet.Columns().AdjustToContents();
+
+                // Save the workbook to a memory stream
+                using (var stream = new MemoryStream())
+                {
+                    workbook.SaveAs(stream);
+                    var content = stream.ToArray();
+
+                    return File(
+                        content,
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        "Supplier_Export_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".xlsx"
+                    );
+                }
+            }
         }
     }
 
@@ -143,7 +226,6 @@ namespace Fujitsu.Controllers
 
             if (model.ProvinceId.HasValue)
             {
-                // Asynchronously query the Province table for the name
                 provinceName = await _context.Provinces
                     .Where(p => p.ProvinceId == model.ProvinceId.Value)
                     .Select(p => p.ProvinceName)
@@ -152,7 +234,6 @@ namespace Fujitsu.Controllers
 
             if (model.CityId.HasValue)
             {
-                // Asynchronously query the City table for the name
                 cityName = await _context.Cities
                     .Where(c => c.CityId == model.CityId.Value)
                     .Select(c => c.CityName)
@@ -172,8 +253,7 @@ namespace Fujitsu.Controllers
                 // Assign the looked-up names (will be null if nothing was selected/found)
                 Province = provinceName,
                 City = cityName,
-
-                Address = model.Address?.Trim(), // Use null conditional operator for optional fields
+                Address = model.Address?.Trim(),
                 ContactPerson = model.ContactPerson?.Trim(),
             };
 
@@ -188,8 +268,6 @@ namespace Fujitsu.Controllers
             }
             catch (DbUpdateException ex)
             {
-                // Handle database errors (e.g., unique constraint violation on SupplierCode)
-                // Log the exception details here
                 return StatusCode(500, $"Database error occurred: {ex.InnerException?.Message ?? ex.Message}");
             }
         }

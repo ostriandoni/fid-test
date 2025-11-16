@@ -186,10 +186,7 @@
         const searchForm = $('#supplier-search-form');
 
         $(document).ready(function () {
-            const searchButton = $('#searchBtn');
-
-            // --- SEARCH BUTTON CLICK HANDLER ---
-            searchButton.click(function (e) {
+            $('#searchBtn').click(function (e) {
                 // Prevent the default form submission (page reload)
                 e.preventDefault();
 
@@ -208,6 +205,12 @@
                     success: function (data) {
                         // 3. Replace the content of the results container with the partial view HTML
                         resultsContainer.html(data);
+
+                        $('#downloadBtn').on('click', function () {
+                            var currentFormData = searchForm.serialize();
+                            var downloadUrl = '@Url.Action("DownloadSuppliers", "Supplier")' + '?' + currentFormData;
+                            window.location.href = downloadUrl;
+                        });
                     },
                     error: function (xhr, status, error) {
                         console.error("Search failed:", error);
@@ -216,7 +219,6 @@
                 });
             });
 
-            // --- CLEAR BUTTON HANDLER ---
             $('#clearBtn').click(function () {
                 // Clear all form inputs within the search form
                 searchForm.find('input, select').val('');
@@ -372,7 +374,7 @@
                 });
 
                 if (response.ok) {
-                    alert('Supplier successfully updated!');
+                    alert('Data successfully updated');
                     $('#editSupplierModal').modal('hide');
                     $('#searchBtn').click();
                 } else {
@@ -406,9 +408,11 @@
             try {
                 // 1. Fetch the data for the selected supplier
                 const response = await fetch(`/api/supplierapi/get/${supplierId}`);
+
                 if (!response.ok) {
                     throw new Error('Failed to fetch supplier details.');
                 }
+
                 const data = await response.json();
 
                 // 2. Populate the Edit Modal fields
@@ -427,7 +431,6 @@
 
                 // 5. Show the Modal
                 $('#editSupplierModal').modal('show');
-
             } catch (error) {
                 alert(`Error loading supplier data: ${error.message}`);
                 console.error('Edit Load Error:', error);
@@ -452,7 +455,7 @@
                         cityDropdown.append($('<option></option>').val(item.value).html(item.text));
                     });
 
-                    cityDropdown.val(selectedCityId).prop('disabled', false); // Set the selected city ID
+                    cityDropdown.val(selectedCityId).prop('disabled', false);
                 } catch (error) {
                     console.error("Error fetching cities for edit modal:", error);
                     cityDropdown.append('<option value="" disabled>Error loading cities</option>');
