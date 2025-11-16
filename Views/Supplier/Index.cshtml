@@ -119,6 +119,67 @@
     </div>
 </div>
 
+<div class="modal fade" id="editSupplierModal" tabindex="-1" aria-labelledby="editSupplierModalLabel"
+    aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="editSupplierModalLabel">Edit Supplier Details</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                    aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editSupplierForm">
+                    <input type="hidden" id="editSupplierId" name="supplierId">
+
+                    <div class="mb-3">
+                        <label for="editSupplierCode" class="form-label">Supplier Code <span
+                                class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="editSupplierCode" required maxlength="50" disabled>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editSupplierName" class="form-label">Supplier Name <span
+                                class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="editSupplierName" required maxlength="100">
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="editProvinceDropdown" class="form-label">Province <span
+                                class="text-danger">*</span></label>
+                        <select id="editProvinceDropdown" class="form-select form-select-sm" name="editProvinceId"
+                            required>
+                            <option value="">-- Select Province --</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="editCityDropdown" class="form-label">City <span class="text-danger">*</span></label>
+                        <select id="editCityDropdown" class="form-select form-select-sm" name="editCityId" disabled
+                            required>
+                            <option value="">-- Select City --</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="editAddress" class="form-label">Address</label>
+                        <input type="text" class="form-control" id="editAddress" maxlength="250">
+                    </div>
+                    <div class="mb-3">
+                        <label for="editContactPerson" class="form-label">Contact Person (PIC) <span
+                                class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="editContactPerson" required maxlength="100">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="submit" class="btn btn-danger" form="editSupplierForm" id="saveEditSupplierBtn">Save
+                    Changes</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 @section Scripts {
     <script>
         const resultsContainer = $('#supplier-results-container');
@@ -202,7 +263,7 @@
             // --- CASCADING DROPDOWN LOGIC (Add Modal) ---
             $('#newProvinceDropdown').change(function () {
                 var provinceId = $(this).val();
-                var cityDropdown = $('#newCityDropdown'); // Targets the modal city dropdown
+                var cityDropdown = $('#newCityDropdown');
 
                 // Clear and disable the City dropdown initially
                 cityDropdown.empty().append('<option value="">-- Select City --</option>');
@@ -231,8 +292,15 @@
                 }
             });
 
+            // --- CASCADING DROPDOWN LOGIC (Edit Modal) ---
+            $('#editProvinceDropdown').change(function () {
+                var provinceId = $(this).val();
+                loadCitiesForEdit(provinceId, null);
+            });
+
             document.getElementById('addSupplierForm').addEventListener('submit', addSupplier);
-            document.getElementById('editBtn').addEventListener('click', () => alert('Edit feature coming soon!'));
+            document.getElementById('editSupplierForm').addEventListener('submit', editSupplier);
+            document.getElementById('editBtn').addEventListener('click', editSupplierHandler);
             document.getElementById('deleteBtn').addEventListener('click', deleteSelectedSuppliers);
             document.getElementById('uploadBtn').addEventListener('click', () => alert('Upload feature coming soon!'));
         });
@@ -276,6 +344,119 @@
             } catch (error) {
                 alert('An unexpected error occurred while communicating with the server.');
                 console.error('Fetch Error:', error);
+            }
+        }
+
+        async function editSupplier(event) {
+            event.preventDefault();
+
+            // 1. Collect data
+            const supplierData = {
+                supplierId: document.getElementById('editSupplierId').value,
+                supplierCode: document.getElementById('editSupplierCode').value.trim(),
+                supplierName: document.getElementById('editSupplierName').value.trim(),
+                provinceId: document.getElementById('editProvinceDropdown').value.trim(),
+                cityId: document.getElementById('editCityDropdown').value.trim(),
+                address: document.getElementById('editAddress').value.trim(),
+                contactPerson: document.getElementById('editContactPerson').value.trim()
+            };
+
+            // 2. Perform API Update
+            try {
+                const response = await fetch('/api/supplierapi/update', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(supplierData),
+                });
+
+                if (response.ok) {
+                    alert('Supplier successfully updated!');
+                    $('#editSupplierModal').modal('hide');
+                    $('#searchBtn').click();
+                } else {
+                    const errorData = await response.json();
+                    alert(`Failed to update supplier. Error: ${errorData.message || response.statusText}`);
+                    console.error('API Error:', errorData);
+                }
+            } catch (error) {
+                alert('An unexpected error occurred while communicating with the server.');
+                console.error('Fetch Error:', error);
+            }
+        }
+
+        async function editSupplierHandler() {
+            const selectedCheckboxes = $('input[type="checkbox"]:checked');
+            const selectedIds = [];
+
+            selectedCheckboxes.each(function () {
+                if ($(this).attr('id') !== 'selectAll') {
+                    selectedIds.push($(this).val());
+                }
+            });
+
+            if (selectedIds.length !== 1) {
+                alert('Please select exactly one supplier to edit.');
+                return;
+            }
+
+            const supplierId = selectedIds[0];
+
+            try {
+                // 1. Fetch the data for the selected supplier
+                const response = await fetch(`/api/supplierapi/get/${supplierId}`);
+                if (!response.ok) {
+                    throw new Error('Failed to fetch supplier details.');
+                }
+                const data = await response.json();
+
+                // 2. Populate the Edit Modal fields
+                $('#editSupplierId').val(data.supplierId);
+                $('#editSupplierCode').val(data.supplierCode);
+                $('#editSupplierName').val(data.supplierName);
+                $('#editAddress').val(data.address);
+                $('#editContactPerson').val(data.contactPerson);
+
+                // 3. Populate Province Dropdown
+                $('#province option').clone().appendTo('#editProvinceDropdown');
+                $('#editProvinceDropdown').val(data.provinceId);
+
+                // 4. Trigger City Dropdown Load (Cascading logic needed here)
+                await loadCitiesForEdit(data.provinceId, data.cityId);
+
+                // 5. Show the Modal
+                $('#editSupplierModal').modal('show');
+
+            } catch (error) {
+                alert(`Error loading supplier data: ${error.message}`);
+                console.error('Edit Load Error:', error);
+            }
+        }
+
+        // --- AUXILIARY FUNCTION TO LOAD CITIES FOR EDIT MODAL ---
+        async function loadCitiesForEdit(provinceId, selectedCityId) {
+            var cityDropdown = $('#editCityDropdown');
+            cityDropdown.empty().append('<option value="">-- Select City --</option>');
+            cityDropdown.prop('disabled', true);
+
+            if (provinceId) {
+                try {
+                    const response = await $.ajax({
+                        url: '/api/supplierapi/cities',
+                        type: "GET",
+                        data: { provinceId: provinceId },
+                    });
+
+                    $.each(response, function (index, item) {
+                        cityDropdown.append($('<option></option>').val(item.value).html(item.text));
+                    });
+
+                    cityDropdown.val(selectedCityId).prop('disabled', false); // Set the selected city ID
+                } catch (error) {
+                    console.error("Error fetching cities for edit modal:", error);
+                    cityDropdown.append('<option value="" disabled>Error loading cities</option>');
+                }
             }
         }
 

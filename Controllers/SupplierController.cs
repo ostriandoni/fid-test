@@ -163,7 +163,6 @@ namespace Fujitsu.Controllers
             // if (model.ProvinceId.HasValue && provinceName == null) return NotFound("Invalid Province ID.");
             // if (model.CityId.HasValue && cityName == null) return NotFound("Invalid City ID.");
 
-
             // 3. Map to the Supplier Entity
             var newSupplier = new Supplier
             {
@@ -228,6 +227,93 @@ namespace Fujitsu.Controllers
             {
                 Console.Error.WriteLine($"Error during bulk delete: {ex}");
                 return StatusCode(500, new { message = "A database error occurred during deletion." });
+            }
+        }
+
+        [HttpGet]
+        [Route("get/{id}")]
+        public async Task<IActionResult> GetSupplierById(int id)
+        {
+            var supplier = await _context.Suppliers
+                .Where(s => s.SupplierId == id)
+                .Select(s => new
+                {
+                    s.SupplierId,
+                    s.SupplierCode,
+                    s.SupplierName,
+                    s.Address,
+                    s.ContactPerson,
+                    ProvinceId = _context.Provinces.Where(p => p.ProvinceName == s.Province).Select(p => p.ProvinceId).FirstOrDefault(),
+                    CityId = _context.Cities.Where(c => c.CityName == s.City).Select(c => c.CityId).FirstOrDefault()
+                })
+                .FirstOrDefaultAsync();
+
+            if (supplier == null)
+            {
+                return NotFound(new { message = "Supplier not found." });
+            }
+
+            return Ok(supplier);
+        }
+
+        [HttpPut]
+        [Route("update")]
+        public async Task<IActionResult> UpdateSupplier([FromBody] UpdateSupplierModel model)
+        {
+            // 1. Validation (ensure required fields are present)
+            if (model.SupplierId <= 0 || string.IsNullOrWhiteSpace(model.SupplierName) || string.IsNullOrWhiteSpace(model.ContactPerson))
+            {
+                return BadRequest(new { message = "Supplier ID, Name, and Contact Person are required for update." });
+            }
+
+            // 2. Find the existing supplier entity
+            var supplierToUpdate = await _context.Suppliers.FindAsync(model.SupplierId);
+
+            if (supplierToUpdate == null)
+            {
+                return NotFound(new { message = $"Supplier with ID {model.SupplierId} not found." });
+            }
+
+            // 3. Lookup Province and City Names (reuse logic from AddSupplier)
+            string provinceName = null;
+            string cityName = null;
+
+            if (model.ProvinceId.HasValue)
+            {
+                provinceName = await _context.Provinces
+                    .Where(p => p.ProvinceId == model.ProvinceId.Value)
+                    .Select(p => p.ProvinceName)
+                    .FirstOrDefaultAsync();
+            }
+
+            if (model.CityId.HasValue)
+            {
+                cityName = await _context.Cities
+                    .Where(c => c.CityId == model.CityId.Value)
+                    .Select(c => c.CityName)
+                    .FirstOrDefaultAsync();
+            }
+
+            // 4. Apply Updates
+            supplierToUpdate.SupplierName = model.SupplierName.Trim();
+            supplierToUpdate.Address = model.Address?.Trim();
+            supplierToUpdate.ContactPerson = model.ContactPerson.Trim();
+            supplierToUpdate.Province = provinceName;
+            supplierToUpdate.City = cityName;
+
+            // 5. Save Changes
+            try
+            {
+                await _context.SaveChangesAsync();
+                return Ok(new { message = "Supplier successfully updated." });
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                return StatusCode(500, new { message = "Concurrency conflict. The supplier may have been deleted or modified by another user." });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = $"A database error occurred: {ex.Message}" });
             }
         }
     }
